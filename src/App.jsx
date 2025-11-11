@@ -23,6 +23,10 @@ import {
   Menu,
 } from "lucide-react";
 
+import {BrowserRouter as Router, Routes, Route} from "react-router-dom";
+import CourseLayout from "./layout/courselayout.jsx";
+import {Link} from "react-router-dom";
+
 /**
  * StudyHubApp (responsive + functional)
  * - No horizontal overflow (w-screen + overflow-x-hidden)
@@ -31,6 +35,7 @@ import {
  * - Buttons wired: navigate, add items, export .ics, save notes, timer start/stop
  */
 const StudyHubApp = () => {
+  const [selectedCourse, setSelectedCourse] = useState(null);
   const [currentPage, setCurrentPage] = useState("dashboard");
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [user] = useState({
@@ -561,7 +566,15 @@ END:VCALENDAR`.replace(/\n/g, "\r\n");
                 </div>
               </div>
               <div className="p-6">
-                <h4 className="font-semibold text-gray-900 mb-2">{course.name}</h4>
+                <h4 className="font-semibold text-gray-900 mb-2">
+                  <button onClick={()=>{
+                    setSelectedCourse(course)
+                    setCurrentPage("courseLayout")
+                  }} 
+                    className="w-full text-left bg-gray-50 hover:bg-gray-100 text-blue-600 px-3 py-2 rounded-lg transition-colors">
+                    {course.name}
+                  </button>
+                </h4>
                 <div className="flex items-center text-sm text-gray-600 mb-2">
                   <span className="mr-1">👤</span>
                   {course.instructor}
@@ -1233,6 +1246,8 @@ END:VCALENDAR`.replace(/\n/g, "\r\n");
         return <StudyTimerPage />;
       case "syllabus":
         return <AISyllabusParser />;
+      case "courseLayout":
+        return <CourseLayout course={selectedCourse} />; //pass the course obj to the component//
       default:
         return <Dashboard />;
     }
@@ -1321,7 +1336,8 @@ END:VCALENDAR`.replace(/\n/g, "\r\n");
 
         {/* Main content */}
         <main className="flex-1 md:ml-64 w-full">
-          <div className="px-4 sm:px-6 lg:px-8 py-6">{renderPage()}</div>
+          <div className="px-4 sm:px-6 lg:px-8 py-6">{renderPage()}
+          </div>
         </main>
       </div>
     </div>
