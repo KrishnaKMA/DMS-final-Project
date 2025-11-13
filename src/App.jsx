@@ -23,9 +23,9 @@ import {
   Menu,
 } from "lucide-react";
 
-import {BrowserRouter as Router, Routes, Route} from "react-router-dom";
+import { Routes, Route, useLocation } from "react-router-dom";
 import CourseLayout from "./layout/courselayout.jsx";
-import {Link} from "react-router-dom";
+import Quiz from "./layout/quiz-layout.jsx";
 
 /**
  * StudyHubApp (responsive + functional)
@@ -35,9 +35,11 @@ import {Link} from "react-router-dom";
  * - Buttons wired: navigate, add items, export .ics, save notes, timer start/stop
  */
 const StudyHubApp = () => {
+  const location = useLocation();
   const [selectedCourse, setSelectedCourse] = useState(null);
   const [currentPage, setCurrentPage] = useState("dashboard");
   const [sidebarOpen, setSidebarOpen] = useState(false);
+
   const [user] = useState({
     name: "Sam Beamish",
     email: "sambeamish321@gmail.com",
@@ -201,6 +203,35 @@ const StudyHubApp = () => {
     seconds: 0,
     selectedCourse: null,
   });
+
+  // Restore course layout when returning from quiz
+  useEffect(() => {
+    // Only check when we're on the home route
+    if (location.pathname === "/") {
+      const returnToCourseLayout = localStorage.getItem("returnToCourseLayout");
+      if (returnToCourseLayout === "true") {
+        const storedCourse = localStorage.getItem("selectedCourse");
+        if (storedCourse) {
+          try {
+            const course = JSON.parse(storedCourse);
+            // Use requestAnimationFrame to ensure state updates happen after navigation completes
+            requestAnimationFrame(() => {
+              setSelectedCourse(course);
+              setCurrentPage("courseLayout");
+              // Clear the flag
+              localStorage.removeItem("returnToCourseLayout");
+            });
+          } catch (error) {
+            console.error("Error parsing stored course:", error);
+            localStorage.removeItem("returnToCourseLayout");
+          }
+        } else {
+          // If no course stored, clear the flag anyway
+          localStorage.removeItem("returnToCourseLayout");
+        }
+      }
+    }
+  }, [location.pathname]);
 
   // ----- DERIVED STATS -----
   const upcomingAssignments = assignments.filter(
@@ -570,6 +601,7 @@ END:VCALENDAR`.replace(/\n/g, "\r\n");
                   <button onClick={()=>{
                     setSelectedCourse(course)
                     setCurrentPage("courseLayout")
+                    localStorage.setItem("selectedCourse", JSON.stringify(course));
                   }} 
                     className="w-full text-left bg-gray-50 hover:bg-gray-100 text-blue-600 px-3 py-2 rounded-lg transition-colors">
                     {course.name}
@@ -1344,4 +1376,11 @@ END:VCALENDAR`.replace(/\n/g, "\r\n");
   );
 };
 
-export default StudyHubApp;
+const App = () => (
+  <Routes>
+    <Route path="/" element={<StudyHubApp />} />
+    <Route path="/quiz/:quizId" element={<Quiz />} />
+  </Routes>
+);
+
+export default App;

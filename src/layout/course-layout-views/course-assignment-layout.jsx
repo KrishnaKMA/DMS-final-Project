@@ -1,16 +1,9 @@
 import React, {useEffect,useState} from "react";
  
 export default function AssignmentView({courseID}){
-    const [assignments, setAssignments] = useState([]);
+    const [assignments, setAssignments] = useState([]); //state to control assignment in the page//
 
-    //fetch set of assignments from database using courseID//
-    /*useEffect(()=>{
-        fetch(`http://localhost:3000/api/assignments?course_id=${courseID}`)
-        .then((res) => res.json())
-        .then((data) => setAssignments(data))
-        .catch((err) => console.error(err))
-    }, [courseID]);*/
-
+    //testing entries//
     useEffect(() => {
         const mockAssignment = [
             {
@@ -37,6 +30,7 @@ export default function AssignmentView({courseID}){
         setAssignments(mockAssignment);
     }, []);
 
+    //build a block for each assignment//
     return(
         <div className="p-6">
             <h2 className="text-2xl font-bold mb-4">Assignments</h2>

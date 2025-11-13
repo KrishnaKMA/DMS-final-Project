@@ -1,20 +1,24 @@
+//This page display all user defined course work(could be quiz, exam, assignment and project, anything that would have a grade)
+//and their grades. User should be able to add and remove course work, as well as setting their weight. A logic of weight setting
+//should be made to ensure it is done logically (does not exceed 100%)
 import React, {useEffect,useState} from "react";
 
-
-
 export default function GradeView(){
-    const grades = [
-        { id: 1, cw_title: "Build Database", grade: 87 },
-        { id: 2, cw_title: "Populate Database", grade: 92 },
-        { id: 3, cw_title: "ER Diagram Design", grade: 75 },
-    ];
+  //test entries for grade//
+  const grades = [
+    { id: 1, cw_title: "Build Database", grade: 87 },
+    { id: 2, cw_title: "Populate Database", grade: 92 },
+    { id: 3, cw_title: "ER Diagram Design", grade: 75 },
+  ];
 
-    let total = 0;
-    for(let i = 0 ; i < grades.length;i++){
-        total += grades[i].grade;
-    }
-    total = total/grades.length;
-
+  //calculate the average of the course works, to be imrpoved//
+  let total = 0;
+  for(let i = 0 ; i < grades.length;i++){
+    total += grades[i].grade;
+  }
+  total = total/grades.length;
+  
+  //build a block for each course_work, and the display of the average(later become the accurate calculation of the course GPA)
   return (
     <div className="p-6">
       <h2 className="text-2xl text-black-500 font-bold mb-4">Grades</h2>
