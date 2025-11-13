@@ -34,7 +34,7 @@ function CustomTab({course}) {
   };
 
   return (
-    <div className="mt-8 -screen">
+    <div className="mt-4 -screen">
         {/* https://mui.com/material-ui/react-tabs/ */}
         <TabContext value={value}>
             <Box sx={{ borderBottom: 1, borderColor: 'divider' }}>
