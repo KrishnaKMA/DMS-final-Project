@@ -39,11 +39,13 @@ export default function QuizView({ course }){
 
   //handle the event of user clicking quiz block(graded or not)//
   const openQuiz = (quiz) => {
-    if (quiz && quiz.grade !== null && quiz.grade !== undefined && quiz.grade !== "") { //if quiz is not completed
-      localStorage.setItem("returnToCourseLayout", "true"); //to return from quiz page to course page//
-      localStorage.setItem("selectedCourse", JSON.stringify(course)); //flag the current course page//
-      localStorage.setItem("courseLayoutTab", "3"); //flag the current view of in the course page//
-      navigate(`/quiz/${quiz.quiz_id}`); //navigate to quiz page//
+    localStorage.setItem("returnToCourseLayout", "true"); //to return from quiz page to course page//
+    localStorage.setItem("selectedCourse", JSON.stringify(course)); //flag the current course page//
+    localStorage.setItem("courseLayoutTab", "3"); //flag the current view of in the course page//
+    if (quiz && quiz.grade == "") { //if quiz is not completed
+      navigate(`/quiz/${quiz.quiz_id}`,{state:{displayType: "quiz"}}); //navigate to quiz page in quiz mode//
+    }else{
+      navigate(`/quiz/${quiz.quiz_id}`,{state:{displayType: "review"}}); //navigate to quiz page in review mode//
     }
   };
   
