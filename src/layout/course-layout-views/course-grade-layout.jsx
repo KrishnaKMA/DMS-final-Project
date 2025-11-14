@@ -5,14 +5,15 @@ import React, {useEffect,useState} from "react";
 import AddButton from "../../assets/AddButton.png";
 
 export default function GradeView({course}){
+  const[course_work, setCW] = useState([]);
   const [final_grade,setFinalGrade] = useState(0);
   const [newCW, setNewCW] = useState(0);
   //test entries for grade//
-  const course_work = [
+  /*const course_work = [
     { id: 1, cw_title: "Build Database", grade: 87, weight: 0.2 },
     { id: 2, cw_title: "Populate Database", grade: 92, weight: 0.1 },
     { id: 3, cw_title: "ER Diagram Design", grade: 75, weight: 0.15},
-  ];
+  ];*/
 
 
   useEffect(() =>{
