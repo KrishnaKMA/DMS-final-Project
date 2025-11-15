@@ -1,47 +1,58 @@
-import React, {useEffect,useState} from "react";
+//This page display all user created practice quizzes. User should be able to click on each quiz and view their answer.
+//They should also be able to feed the system a course material and generate a new practice quiz. For any quiz without a grade
+//(not compelted), the system would navigate user to the quiz-layout page where all the ai-generated question would be displayed
+import React, { useState } from "react";
+import { useNavigate } from "react-router-dom";
 import AddButton from "../../assets/AddButton.png";
+import { useEffect } from "react";
 
-export default function QuizView(){
+
+export default function QuizView({ course }){
+  //the state to describe the visibility of the quiz generating form//
   const [newQuiz, setNewQuizForm] = useState(false);
-    const quizzes = [
-    {
-      quiz_id: 1,
-      quiz_name: "Database Fundamentals Quiz",
-      date: "2025-11-25",
-      grade: 88,
-    },
-    {
-      quiz_id: 2,
-      quiz_name: "SQL Query Practice",
-      date: "2025-12-02",
-      grade: 94,
-    },
-    {
-      quiz_id: 3,
-      quiz_name: "Normalization and Keys",
-      date: "2025-12-10",
-      grade: 79,
-    },
-  ];
+  const [quizzes, setQuizzes] = useState([]);
+  const navigate = useNavigate();
+  //test entries for quizzes//
+  useEffect(() => {
+    let allQuizzes = []
+    const storedQuizzes = localStorage.getItem("quizes");
+    allQuizzes = JSON.parse(storedQuizzes);
+    let courseQuizzes = allQuizzes.filter((q)=> String(q.course_id) == String(course.course_id));
+    setQuizzes(courseQuizzes);
+  },[course]);
 
+  //handle the event of user clicking quiz block(graded or not)//
+  const openQuiz = (quiz) => {
+    localStorage.setItem("returnToCourseLayout", "true"); //to return from quiz page to course page//
+    localStorage.setItem("selectedCourse", JSON.stringify(course)); //flag the current course page//
+    localStorage.setItem("courseLayoutTab", "3"); //flag the current view of in the course page//
+    if (quiz && quiz.grade == "") { //if quiz is not completed
+      navigate(`/quiz/${quiz.quiz_id}`,{state:{displayType: "quiz"}}); //navigate to quiz page in quiz mode//
+    }else{
+      navigate(`/quiz/${quiz.quiz_id}`,{state:{displayType: "review"}}); //navigate to quiz page in review mode//
+    }
+  };
+  
+  //build a block for each quiz//
   return (
     <div className="p-1">
       <h2 className="text-2xl text-black font-bold mb-4">Your Quizzes</h2>
       <div className="space-y-4">
-      <button  className="flex items-center gap-2 px-4 pb-2 mb-2 rounded 
+        <button  className="flex items-center gap-2 px-4 pb-2 mb-2 rounded 
              bg-transparent text-blue-600 
              hover:bg-gray-200 
              focus:outline-none focus:ring-0 
              active:outline-none active:ring-0 
              border-none transition"
   style={{ outline: "none", boxShadow: "none" }}
-          onClick={() => setNewQuizForm(true)}>
+          onClick={() => setNewQuizForm(true)}> 
           <img src={AddButton} alt="Make Quiz" className="w-5 h-5" />
           Generate a New Quiz
         </button>
         {quizzes.map((quiz) => (
           <div
             key={quiz.quiz_id}
+            onClick={() => openQuiz(quiz)}
             className="bg-white shadow-md rounded-xl border border-gray-300 p-4 w-full mx-auto hover:shadow-lg transition"
           >
             <h3 className="text-lg font-semibold text-gray-800">
@@ -61,21 +72,23 @@ export default function QuizView(){
   );
 }
 
+//build a form for user to define a new quiz//
 function NewQuizForm({ onClose }){
   const [numQuestions, setNumQuestions] = useState(0);
   const [file, setFile] = useState(null);
 
+  //handle form submission//
   const generateQuiz = async (e) => {
     e.preventDefault();
-    if(!file){
+    if(!file){ 
       e.preventDefault(); 
       alert("You did not select a file");
       onClose(); 
-    }else{
+    }else{ 
       setLoading(true);
-      const quiz = await generateQuiz(file,numQuestions);
+      const quiz = await callGenerateQuizAPI(file, numQuestions); //passes arguments of new quiz//
       if(quiz.success){
-        setQuiz(data.quiz);
+        setQuiz(quiz); 
       }else{
         alert("Failed to generate quiz: " + quiz.error);
       }
@@ -112,18 +125,20 @@ function NewQuizForm({ onClose }){
   );
 }
 
-async function generateQuiz(file , numQuestions){
+async function callGenerateQuizAPI(file , numQuestions){
+  //insert argument to formData
   const formData = new FormData();
   formData.append("file", file);
   formData.append("numQ", numQuestions);
 
+  //make HTTP request with quiz arguments//
   try {
     const res = await fetch("http://localhost:3000/generateQuiz", {
       method: "POST",
       body: formData,
     });
 
-    return await res.json(); 
+    return await res.json(); //return result//
   } catch (err) {
     console.error("Error:", err);
     throw err;
