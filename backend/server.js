@@ -1,7 +1,10 @@
 import express from "express";
 import dotenv from "dotenv";
 import connectDB from "./db.js";   
-import apiRoutes from "./routes/Routes.js";
+import apiRoutes from "./routes/ModelRoutes.js";
+import {User} from "./models/models.js";
+import cors from "cors";
+
 
 dotenv.config();
 
@@ -13,6 +16,20 @@ connectDB();
 
 app.get("/", (req, res) => {
   res.send("Backend is running");
+});
+
+app.get("/api/test-mongo", async (req, res) => {
+  try {
+    const u = await User.create({
+      username: "test_user",
+      email: "test@example.com",
+      pswd_hash: "123456"
+    });
+
+    res.json({ success: true, data: u });
+  } catch (err) {
+    res.json({ success: false, error: err.message });
+  }
 });
 
 //model routes//
