@@ -23,6 +23,10 @@ import {
   Menu,
 } from "lucide-react";
 
+import { Routes, Route, useLocation } from "react-router-dom";
+import CourseLayout from "./layout/courselayout.jsx";
+import Quiz from "./layout/quiz-layout.jsx";
+
 /**
  * StudyHubApp (responsive + functional)
  * - No horizontal overflow (w-screen + overflow-x-hidden)
@@ -31,8 +35,11 @@ import {
  * - Buttons wired: navigate, add items, export .ics, save notes, timer start/stop
  */
 const StudyHubApp = () => {
+  const location = useLocation();
+  const [selectedCourse, setSelectedCourse] = useState(null);
   const [currentPage, setCurrentPage] = useState("dashboard");
   const [sidebarOpen, setSidebarOpen] = useState(false);
+
   const [user] = useState({
     name: "Sam Beamish",
     email: "sambeamish321@gmail.com",
@@ -196,6 +203,35 @@ const StudyHubApp = () => {
     seconds: 0,
     selectedCourse: null,
   });
+
+  // Restore course layout when returning from quiz
+  useEffect(() => {
+    // Only check when we're on the home route
+    if (location.pathname === "/") {
+      const returnToCourseLayout = localStorage.getItem("returnToCourseLayout");
+      if (returnToCourseLayout === "true") {
+        const storedCourse = localStorage.getItem("selectedCourse");
+        if (storedCourse) {
+          try {
+            const course = JSON.parse(storedCourse);
+            // Use requestAnimationFrame to ensure state updates happen after navigation completes
+            requestAnimationFrame(() => {
+              setSelectedCourse(course);
+              setCurrentPage("courseLayout");
+              // Clear the flag
+              localStorage.removeItem("returnToCourseLayout");
+            });
+          } catch (error) {
+            console.error("Error parsing stored course:", error);
+            localStorage.removeItem("returnToCourseLayout");
+          }
+        } else {
+          // If no course stored, clear the flag anyway
+          localStorage.removeItem("returnToCourseLayout");
+        }
+      }
+    }
+  }, [location.pathname]);
 
   // ----- DERIVED STATS -----
   const upcomingAssignments = assignments.filter(
@@ -561,7 +597,16 @@ END:VCALENDAR`.replace(/\n/g, "\r\n");
                 </div>
               </div>
               <div className="p-6">
-                <h4 className="font-semibold text-gray-900 mb-2">{course.name}</h4>
+                <h4 className="font-semibold text-gray-900 mb-2">
+                  <button onClick={()=>{
+                    setSelectedCourse(course)
+                    setCurrentPage("courseLayout")
+                    localStorage.setItem("selectedCourse", JSON.stringify(course));
+                  }} 
+                    className="w-full text-left bg-gray-50 hover:bg-gray-100 text-blue-600 px-3 py-2 rounded-lg transition-colors">
+                    {course.name}
+                  </button>
+                </h4>
                 <div className="flex items-center text-sm text-gray-600 mb-2">
                   <span className="mr-1">👤</span>
                   {course.instructor}
@@ -576,9 +621,57 @@ END:VCALENDAR`.replace(/\n/g, "\r\n");
     );
   };
 
+  function getWeekdayName(index) {
+  const weekdays = [
+    "Sunday", "Monday", "Tuesday",
+    "Wednesday", "Thursday", "Friday", "Saturday"
+  ];
+  return weekdays[index];
+}
+
+
   const CalendarPage = () => {
     const timeSlots = ["8 AM", "9 AM", "10 AM", "11 AM", "12 PM", "1 PM", "2 PM", "3 PM", "4 PM"];
     const days = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"];
+
+    //states for holiday display//
+    const [year, setYear] = useState(new Date().getFullYear());
+    const [holidays, setHolidays] = useState([]);
+
+    //load holiday from database//
+    const dbHolidays = async () =>{
+      const res = await fetch(`http://localhost:3000/api/holidays?year=${year}`);
+      const data = await res.json();
+      setHolidays(data.holidays || []);
+    };
+
+    //sync holiday data from Nager with DB holiday schema//
+    const syncHolidays = async() =>{
+      const res = await fetch("http://localhost:3000/api/sync",{
+        method: "POST",
+        headers: {"Content-Type": "application/json"},
+        body: JSON.stringify({year,countryCode:"CA"}),
+      });
+      const holiday_sync_data = await res.json();
+    };
+
+    //auto sync holiday//
+    useEffect(() =>{
+      const autoSync = async() =>{
+        try{
+          await syncHolidays();
+          await dbHolidays();
+        }catch(error){
+          console.error("Holiday sync failed");
+        }
+      }
+      autoSync();
+    }, [year]);
+
+    const changeDateToWeekDay = (dateString) =>{
+      const date = new Date(dateString);
+      return date.toLocaleDateString("en-US", { weekday: "long" });
+    };
 
     const getClassesForDay = (day) => classes.filter((c) => c.dayOfWeek === day);
     const to24h = (label) => {
@@ -598,6 +691,8 @@ END:VCALENDAR`.replace(/\n/g, "\r\n");
 
     return (
       <div className="max-w-7xl mx-auto">
+         <div className="mt-4 mb-6 flex gap-3 items-center">
+      </div>
         <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 mb-8">
           <div>
             <h2 className="text-3xl font-bold text-gray-900 mb-1">Weekly Timetable</h2>
@@ -632,11 +727,23 @@ END:VCALENDAR`.replace(/\n/g, "\r\n");
               <thead>
                 <tr>
                   <th className="border border-gray-200 bg-gray-50 p-3 text-left font-semibold text-gray-700">Time</th>
-                  {days.map((day) => (
-                    <th key={day} className="border border-gray-200 bg-gray-50 p-3 text-left font-semibold text-gray-700">
-                      {day}
+                  {days.map((day) => {
+                    const holidayToday = holidays.find((h) => getWeekdayName(h.date) === day);
+
+                  return (
+                    <th
+                      key={day}
+                      className="border border-gray-200 bg-gray-50 p-3 text-left font-semibold text-gray-700"
+                    >
+                      <div>{day}</div>
+                        {holidayToday && (
+                          <div className="text-red-600 text-xs font-semibold mt-1">
+                            🎉 {holidayToday.local_name || holidayToday.name}
+                          </div>
+                        )}
                     </th>
-                  ))}
+                  );
+                  })}
                 </tr>
               </thead>
               <tbody>
@@ -1233,6 +1340,8 @@ END:VCALENDAR`.replace(/\n/g, "\r\n");
         return <StudyTimerPage />;
       case "syllabus":
         return <AISyllabusParser />;
+      case "courseLayout":
+        return <CourseLayout course={selectedCourse} />; //pass the course obj to the component//
       default:
         return <Dashboard />;
     }
@@ -1321,11 +1430,19 @@ END:VCALENDAR`.replace(/\n/g, "\r\n");
 
         {/* Main content */}
         <main className="flex-1 md:ml-64 w-full">
-          <div className="px-4 sm:px-6 lg:px-8 py-6">{renderPage()}</div>
+          <div className="px-4 sm:px-6 lg:px-8 py-6">{renderPage()}
+          </div>
         </main>
       </div>
     </div>
   );
 };
 
-export default StudyHubApp;
+const App = () => (
+  <Routes>
+    <Route path="/" element={<StudyHubApp />} />
+    <Route path="/quiz/:quizId" element={<Quiz />} />
+  </Routes>
+);
+
+export default App;
