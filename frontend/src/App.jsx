@@ -643,6 +643,7 @@ END:VCALENDAR`.replace(/\n/g, "\r\n");
       const res = await fetch(`http://localhost:3000/api/holidays?year=${year}`);
       const data = await res.json();
       setHolidays(data.holidays || []);
+      localStorage.setItem("holidays", data.holidays);
     };
 
     //sync holiday data from Nager with DB holiday schema//
