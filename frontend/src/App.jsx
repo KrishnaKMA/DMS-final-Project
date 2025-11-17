@@ -621,6 +621,15 @@ END:VCALENDAR`.replace(/\n/g, "\r\n");
     );
   };
 
+  function getWeekdayName(index) {
+  const weekdays = [
+    "Sunday", "Monday", "Tuesday",
+    "Wednesday", "Thursday", "Friday", "Saturday"
+  ];
+  return weekdays[index];
+}
+
+
   const CalendarPage = () => {
     const timeSlots = ["8 AM", "9 AM", "10 AM", "11 AM", "12 PM", "1 PM", "2 PM", "3 PM", "4 PM"];
     const days = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"];
@@ -638,10 +647,10 @@ END:VCALENDAR`.replace(/\n/g, "\r\n");
 
     //sync holiday data from Nager with DB holiday schema//
     const syncHolidays = async() =>{
-      const res = await fetch("http://localhost:3000/api/holidays/sync",{
+      const res = await fetch("http://localhost:3000/api/sync",{
         method: "POST",
         headers: {"Content-Type": "application/json"},
-        body: JSON.stringify({year,counteryCode:"CA"}),
+        body: JSON.stringify({year,countryCode:"CA"}),
       });
       const holiday_sync_data = await res.json();
     };

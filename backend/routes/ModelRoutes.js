@@ -1,6 +1,7 @@
 import express from "express";
 import * as controllers from "../controllers/ModelController.js";
 import axios from "axios";
+import { Holiday } from "../models/models.js"
 
 const router = express.Router();
 
@@ -52,8 +53,8 @@ router.post("/sync", async (req ,res)=>{
         }
 
         //retrieving list of holiday from nager//
-        const nager_url = `https://date.nager.at/api/v3/publicholidays/${Year}/${CountryCode}`;
-        const response = await axios.get(nager_url_url);
+        const nager_url = `https://date.nager.at/api/v3/publicholidays/${year}/${countryCode}`;
+        const response = await axios.get(nager_url);
         const holidays = response.data;
 
         let count = 0; //counter of saved entry//
@@ -61,13 +62,14 @@ router.post("/sync", async (req ,res)=>{
         for(let h of holidays){
             try{
                 await Holiday.updateOne(
-                    {country_code: countryCode, eyar, date: h.date},
+                    {country_code: countryCode, year, date: h.date},
                     {
-                        country_code: countryCode,year,
+                        country_code: countryCode,
+                        year,
                         date: h.date,
                         local_name: h.localName,
                         name: h.name,
-                        type: h.types?.join(",")?? "Public"
+                        type: h.types?.join(",")?? "Public",
                     },
                     {upsert: true}
                 );
@@ -77,7 +79,7 @@ router.post("/sync", async (req ,res)=>{
             }
         }
 
-        res.join({
+        res.json({
             messasge: "Holidays synced",
             saved: count,
         });
@@ -87,20 +89,21 @@ router.post("/sync", async (req ,res)=>{
     }
 });
 
-router.get("/", async(req,res)=>{
+router.get("/holidays", async(req,res)=>{
     try{
         const {year, countryCode = "CA"} = req.query;
         if(!year){
             return res.status(400).json({error: "year is required for query"});
         }
 
-        const holidays = await Holidays.find({
+        const holidays = await Holiday.find({
             country_code: countryCode,
             year: parseInt(year)
-        })
-        holidays.sort({date:1});
+        });
+        holidays.sort((a, b) => new Date(a.date) - new Date(b.date));
 
-        res,json({year, countryCode, holidays});
+
+        res.json({year, countryCode, holidays});
     }catch(error){
         res.status(500).json({error: "Cannot load Holiday"});
     }
