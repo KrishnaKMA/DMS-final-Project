@@ -1,17 +1,31 @@
 import * as Models from "../models/models.js";
 
-function err_500 (res, error){
+export function err_500 (res, error){
     res.status(500).json({ error: error.message });
 }
 
-function err_404 (res){
+export function err_404 (res){
     return res.status(404).json({ error: "not found" });
 }
 
 export const createUser = async (req, res) => {
     try {
-        const user = await Models.User.create(req.body);
-        res.json(user);
+        //take the attribute from the register form//
+        const {username, email, pswd_hash} = req.body;
+
+        //hash the password with bcrypt//
+        pswd_hash = await bcrypt.hash(pswd_hash,10);
+
+        //prepare User obj to push to db//
+        const newUserObj = new Models.User({
+            username,
+            email,
+            pswd_hash: pswd_hash
+        });
+
+        //save the user obj//
+        await newUserObj.save();
+        res.status(201).json(newUser);
     } catch (error) {
         err_500(res,error);
     }
@@ -37,7 +51,22 @@ export const getUsersById = async (req,res)=>{
     }catch(error){
         err_500(res,error);
     }
-}
+};
+
+export const getUserByEmail = async (req,res)=>{
+    try{
+        const {email} = req.params;
+        const user = await Models.User.findOne({email});
+        if (!user) {
+            return err_404(res);
+        }
+        res.json(user);
+    }catch(error){
+        err_500(res,error);
+    }
+};
+
+//cpurse//
 
 export const createCourse = async (req, res) => {
     try {
