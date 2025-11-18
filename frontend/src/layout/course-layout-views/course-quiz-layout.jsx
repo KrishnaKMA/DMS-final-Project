@@ -17,8 +17,11 @@ export default function QuizView({ course }){
     let allQuizzes = []
     const storedQuizzes = localStorage.getItem("quizes");
     allQuizzes = JSON.parse(storedQuizzes);
-    let courseQuizzes = allQuizzes.filter((q)=> String(q.course_id) == String(course.course_id));
-    setQuizzes(courseQuizzes);
+    if(allQuizzes){
+          let courseQuizzes = allQuizzes.filter((q)=> String(q.course_id) == String(course.course_id));
+              setQuizzes(courseQuizzes);
+
+    }
   },[course]);
 
   //handle the event of user clicking quiz block(graded or not)//

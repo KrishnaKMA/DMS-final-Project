@@ -99,23 +99,46 @@ const StudyHubApp = () => {
     setAuthForm((prev) => ({ ...prev, [name]: value }));
   };
 
-  const handleManualAuth = (e) => {
+  const handleManualAuth = async (e) => {
     e.preventDefault();
     setAuthError("");
+    //check if input fields are empty//
     if (!authForm.email || !authForm.password || (authScreen === "signup" && !authForm.name)) {
       setAuthError("Please fill in all required fields.");
       return;
     }
     setAuthLoading(true);
-    setTimeout(() => {
-      setUser({
-        name: authScreen === "signup" ? authForm.name : authForm.email.split("@")[0],
+
+    //make a user obj for new user//
+    let new_user;
+    try{
+      new_user={
+        username: authScreen === "signup" 
+        ? authForm.name
+        : authForm.email.split("@")[0],
         email: authForm.email,
-      });
+        pswd_hash: authForm.password
+      };
+    }catch(error){
+        setAuthError("Unexpected error, please try again.");
+        return;
+    }
+    //pass it to backend//
+    try{
+      const response = await axios.post("http://localhost:3000/api/user",new_user);
+      const savedUser = response.data;
+      setTimeout(() => {
+      setUser(savedUSer); //set the current user as the newly registered user//
+
+      //reset the form//
       setAuthForm({ name: "", email: "", password: "" });
       setAuthLoading(false);
       setAuthScreen("landing");
-    }, 800);
+      }, 800);
+    }catch(error){
+      setAuthError("Registration failed.");
+      setAuthLoading(false);
+    }
   };
 
   const decodeCredential = (credential) => {

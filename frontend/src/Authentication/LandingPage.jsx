@@ -45,7 +45,7 @@ export default function LandingPage({ setAuthScreen }) {
             </li>
             <li className="flex items-start gap-3">
               <CalendarDays className="w-5 h-5 text-blue-400 mt-1" />
-              <p>Holiday-aware schedule that highlights Nigerian public holidays.</p>
+              <p>Holiday-aware schedule that highlights public holidays.</p>
             </li>
             <li className="flex items-start gap-3">
               <TrendingUp className="w-5 h-5 text-blue-400 mt-1" />
