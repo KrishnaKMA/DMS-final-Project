@@ -120,3 +120,16 @@ const holidaySchema = new mongoose.Schema({
 }, {timestamps: true});
 holidaySchema.index({country_code: 1, year: 1, date: 1}, {unique: true});
 export const Holiday  = mongoose.model("Holiday", holidaySchema);
+
+const dashboardStateSchema = new mongoose.Schema(
+    {
+        user_id: { type: mongoose.Schema.Types.ObjectId, ref: "User", unique: true, required: true },
+        data: {
+            type: mongoose.Schema.Types.Mixed,
+            default: {},
+        },
+    },
+    { timestamps: true }
+);
+
+export const DashboardState = mongoose.model("DashboardState", dashboardStateSchema);

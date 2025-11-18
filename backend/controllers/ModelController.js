@@ -2,13 +2,12 @@ import * as Models from "../models/models.js";
 import bcrypt from "bcrypt";
 
 export function err_500 (res, error){
-    res.status(500).json({ error: error.message });
-    console.error("CreateUser Error:", error);
+    console.error("Controller Error:", error);
+    res.status(500).json({ error: error?.message ?? "Internal server error" });
 }
 
-export function err_404 (res){
-    return res.status(404).json({ error: "not found" });
-    console.error("CreateUser Error:", error);
+export function err_404 (res, message = "not found"){
+    return res.status(404).json({ error: message });
 }
 
 export const createUser = async (req, res) => {
@@ -31,7 +30,7 @@ export const createUser = async (req, res) => {
         await newUserObj.save();
         res.status(201).json(newUserObj);
     } catch (error) {
-        err_500(json);
+        err_500(res, error);
     }
 };
 
@@ -62,11 +61,31 @@ export const getUserByEmail = async (req,res)=>{
         const {email} = req.params;
         const user = await Models.User.findOne({email});
         if (!user) {
-            return err_404(res);
+            return err_404(res, "User not found");
         }
         res.json(user);
     }catch(error){
         err_500(res,error);
+    }
+};
+
+export const loginUser = async (req, res) => {
+    try {
+        const { email, password } = req.body;
+        if (!email || !password) {
+            return res.status(400).json({ error: "Email and password are required." });
+        }
+        const user = await Models.User.findOne({ email });
+        if (!user) {
+            return res.status(401).json({ error: "Invalid credentials." });
+        }
+        const match = await bcrypt.compare(password, user.pswd_hash);
+        if (!match) {
+            return res.status(401).json({ error: "Invalid credentials." });
+        }
+        res.json(user);
+    } catch (error) {
+        err_500(res, error);
     }
 };
 
@@ -440,7 +459,7 @@ export const getPerformanceStats = async (req, res) => {
 //holiday//
 export const getAllHolidays = async (req, res) => {
     try {
-        const holidays = await Holiday.find();
+        const holidays = await Models.Holiday.find();
         if (!holidays || holidays.length === 0) {
             return err_404(res);
         }
@@ -448,6 +467,38 @@ export const getAllHolidays = async (req, res) => {
         res.json(holidays);
     } catch (error) {
         err_500(res,error);
+    }
+};
+
+// Dashboard state persistence
+export const upsertDashboardState = async (req, res) => {
+    try {
+        const { userId, data } = req.body;
+        if (!userId) {
+            return res.status(400).json({ error: "userId is required" });
+        }
+        const payload = typeof data === "object" && data !== null ? data : {};
+        const state = await Models.DashboardState.findOneAndUpdate(
+            { user_id: userId },
+            { data: payload },
+            { new: true, upsert: true, setDefaultsOnInsert: true }
+        );
+        res.json(state);
+    } catch (error) {
+        err_500(res, error);
+    }
+};
+
+export const getDashboardStateByUser = async (req, res) => {
+    try {
+        const { userId } = req.params;
+        const state = await Models.DashboardState.findOne({ user_id: userId });
+        if (!state) {
+            return err_404(res, "Dashboard state not found");
+        }
+        res.json(state);
+    } catch (error) {
+        err_500(res, error);
     }
 };
 

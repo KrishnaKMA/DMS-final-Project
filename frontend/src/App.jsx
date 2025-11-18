@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from "react";
+import React, { useState, useEffect, useRef, useCallback } from "react";
 import {
   Calendar,
   BookOpen,
@@ -59,6 +59,28 @@ const WEEKDAY_TO_INDEX = {
 };
 const INDEX_TO_WEEKDAY = Object.fromEntries(Object.entries(WEEKDAY_TO_INDEX).map(([day, idx]) => [idx, day]));
 
+const API_BASE_URL = (import.meta.env.VITE_API_URL ?? "http://localhost:3000").replace(/\/$/, "");
+
+const DASHBOARD_DEFAULT_STATE = Object.freeze({
+  courses: [],
+  assignments: [],
+  classes: [],
+  notebooks: [],
+  studySessions: [],
+});
+
+const generatePlaceholderPassword = () => Math.random().toString(36).slice(-10) + Date.now().toString(36);
+
+const formatUserForClient = (userDoc, overrides = {}) => {
+  if (!userDoc) return null;
+  return {
+    ...userDoc,
+    ...overrides,
+    name: overrides.name ?? userDoc.username ?? userDoc.name ?? userDoc.email?.split("@")[0] ?? "Student",
+    email: overrides.email ?? userDoc.email ?? "",
+  };
+};
+
 const parseISODate = (iso) => {
   const [year, month, day] = iso.split("-").map(Number);
   return new Date(year, month - 1, day);
@@ -95,57 +117,218 @@ const StudyHubApp = () => {
   const [authScreen, setAuthScreen] = useState("landing"); // landing | login | signup
   const [authForm, setAuthForm] = useState({ name: "", email: "", password: "" });
   const [authLoading, setAuthLoading] = useState(false);
+  const [stateLoading, setStateLoading] = useState(false);
+  const [stateError, setStateError] = useState("");
+  const [stateHydrated, setStateHydrated] = useState(false);
+  const userId = user?._id;
 
   const handleAuthInput = (e) => {
     const { name, value } = e.target;
     setAuthForm((prev) => ({ ...prev, [name]: value }));
   };
 
+  const fetchUserByEmail = useCallback(async (email) => {
+    const response = await axios.get(`${API_BASE_URL}/api/user/email/${encodeURIComponent(email)}`);
+    return response.data;
+  }, []);
+
+  const ensureUserRecord = useCallback(
+    async ({ name, email }) => {
+      if (!email) {
+        throw new Error("Email is required");
+      }
+      try {
+        return await fetchUserByEmail(email);
+      } catch (error) {
+        if (error.response?.status === 404) {
+          const payload = {
+            username: name || email.split("@")[0],
+            email,
+            pswd_hash: generatePlaceholderPassword(),
+          };
+          const createResponse = await axios.post(`${API_BASE_URL}/api/user`, payload);
+          return createResponse.data;
+        }
+        throw error;
+      }
+    },
+    [fetchUserByEmail]
+  );
+
   const handleManualAuth = async (e) => {
     e.preventDefault();
     setAuthError("");
-    //check if input fields are empty//
     if (!authForm.email || !authForm.password || (authScreen === "signup" && !authForm.name)) {
       setAuthError("Please fill in all required fields.");
       return;
     }
     setAuthLoading(true);
-
-    //make a user obj for new user//
-    let new_user;
-    try{
-      new_user={
-        username: authScreen === "signup" 
-        ? authForm.name
-        : authForm.email.split("@")[0],
-        email: authForm.email,
-        pswd_hash: authForm.password
-      };
-      alert("made user obj");
-    }catch(error){
-        setAuthError("Unexpected error, please try again.");
-        return;
-    }
-    //pass it to backend//
-    try{
-      const response = await axios.post("http://localhost:3000/api/user",new_user);
-      const savedUser = response.data;
-      alert("begin to set user");
-      setTimeout(() => {
-      setUser(savedUser); //set the current user as the newly registered user//
-      alert("set user");
-
-      //reset the form//
+    try {
+      let response;
+      if (authScreen === "signup") {
+        const newUserPayload = {
+          username: authForm.name,
+          email: authForm.email,
+          pswd_hash: authForm.password,
+        };
+        response = await axios.post(`${API_BASE_URL}/api/user`, newUserPayload);
+      } else {
+        response = await axios.post(`${API_BASE_URL}/api/auth/login`, {
+          email: authForm.email,
+          password: authForm.password,
+        });
+      }
+      const savedUser = formatUserForClient(response.data);
+      setUser(savedUser);
       setAuthForm({ name: "", email: "", password: "" });
-      setAuthLoading(false);
       setAuthScreen("landing");
-      }, 800);
-    }catch(error){
-        console.log("AXIOS ERROR:", error.response?.data || error.message);
-      setAuthError("Registration failed.");
+    } catch (error) {
+      console.error("Authentication error:", error);
+      const fallback = authScreen === "signup" ? "Registration failed." : "Invalid email or password.";
+      setAuthError(error.response?.data?.error ?? fallback);
+    } finally {
       setAuthLoading(false);
     }
   };
+
+
+  // ----- DATA -----
+  const [courses, setCourses] = useState([]);
+
+  const [assignments, setAssignments] = useState([]);
+
+  const [classes, setClasses] = useState([]);
+
+  const today = new Date();
+  const [calendarMonth, setCalendarMonth] = useState(today.getMonth());
+  const [calendarYear, setCalendarYear] = useState(today.getFullYear());
+  const courseColorPalette = ["purple", "blue", "pink", "green", "orange"];
+  const [courseForm, setCourseForm] = useState({
+    code: "",
+    name: "",
+    instructor: "",
+    credits: "3",
+    semester: "Fall 2024",
+    description: "",
+    color: courseColorPalette[0],
+  });
+  const [editingCourseId, setEditingCourseId] = useState(null);
+  const courseFormRef = useRef(null);
+
+  const [isScheduleModalOpen, setIsScheduleModalOpen] = useState(false);
+  const [editingClassId, setEditingClassId] = useState(null);
+  const [classForm, setClassForm] = useState({
+    courseId: courses[0]?.id ?? "",
+    type: "lecture",
+    dayOfWeek: "Monday",
+    startTime: "09:00",
+    endTime: "10:00",
+    location: "",
+  });
+
+  const [holidays, setHolidays] = useState([]);
+  const [holidayError, setHolidayError] = useState("");
+  const [holidaysLoading, setHolidaysLoading] = useState(false);
+  const [isAssignmentModalOpen, setIsAssignmentModalOpen] = useState(false);
+  const [editingAssignmentId, setEditingAssignmentId] = useState(null);
+  const buildAssignmentForm = () => ({
+    courseId: courses[0]?.id ?? "",
+    title: "",
+    description: "",
+    dueDate: new Date().toISOString().split("T")[0],
+    priority: "medium",
+    status: "not_started",
+    type: "assignment",
+    weight: 5,
+  });
+  const [assignmentForm, setAssignmentForm] = useState(buildAssignmentForm);
+
+  const [notebooks, setNotebooks] = useState([]);
+
+  const [studySessions, setStudySessions] = useState([]);
+
+  const [timerState, setTimerState] = useState({
+    isRunning: false,
+    seconds: 0,
+    selectedCourse: null,
+  });
+
+  const applyDashboardState = useCallback(
+    (snapshot = DASHBOARD_DEFAULT_STATE) => {
+      setCourses(Array.isArray(snapshot.courses) ? snapshot.courses : []);
+      setAssignments(Array.isArray(snapshot.assignments) ? snapshot.assignments : []);
+      setClasses(Array.isArray(snapshot.classes) ? snapshot.classes : []);
+      setNotebooks(Array.isArray(snapshot.notebooks) ? snapshot.notebooks : []);
+      setStudySessions(Array.isArray(snapshot.studySessions) ? snapshot.studySessions : []);
+    },
+    []
+  );
+
+  const resetDashboardState = useCallback(() => {
+    applyDashboardState(DASHBOARD_DEFAULT_STATE);
+  }, [applyDashboardState]);
+
+  const fetchDashboardState = useCallback(
+    async (targetUserId) => {
+      setStateLoading(true);
+      setStateError("");
+      try {
+        const { data } = await axios.get(`${API_BASE_URL}/api/dashboard-state/${targetUserId}`);
+        applyDashboardState(data?.data ?? DASHBOARD_DEFAULT_STATE);
+      } catch (error) {
+        if (error.response?.status === 404) {
+          resetDashboardState();
+        } else {
+          console.error("Failed to load dashboard state:", error);
+          setStateError("Couldn't load your saved data. Changes are stored locally only.");
+          resetDashboardState();
+        }
+      } finally {
+        setStateLoading(false);
+        setStateHydrated(true);
+      }
+    },
+    [applyDashboardState, resetDashboardState]
+  );
+
+  const persistDashboardState = useCallback(
+    async (snapshot) => {
+      if (!userId) return;
+      try {
+        await axios.post(`${API_BASE_URL}/api/dashboard-state`, {
+          userId,
+          data: snapshot,
+        });
+        setStateError("");
+      } catch (error) {
+        console.error("Failed to save dashboard state:", error);
+        setStateError("Unable to save changes. We'll keep trying automatically.");
+      }
+    },
+    [userId]
+  );
+
+  useEffect(() => {
+    if (!userId) {
+      resetDashboardState();
+      setStateError("");
+      setStateHydrated(false);
+      return;
+    }
+    fetchDashboardState(userId);
+  }, [userId, fetchDashboardState, resetDashboardState]);
+
+  useEffect(() => {
+    if (!userId || !stateHydrated) return;
+    const snapshot = {
+      courses,
+      assignments,
+      classes,
+      notebooks,
+      studySessions,
+    };
+    persistDashboardState(snapshot);
+  }, [courses, assignments, classes, notebooks, studySessions, userId, stateHydrated, persistDashboardState]);
 
   const decodeCredential = (credential) => {
     try {
@@ -161,26 +344,37 @@ const StudyHubApp = () => {
     }
   };
 
-  const handleCredentialResponse = (response) => {
+  const handleCredentialResponse = async (response) => {
     setAuthError("");
     const profile = decodeCredential(response.credential);
-    if (!profile) {
+    if (!profile?.email) {
       setAuthError("Unable to read Google profile. Please try again.");
       return;
     }
-    setUser({
-      name: profile.name,
-      email: profile.email,
-      picture: profile.picture,
-    });
-    if (typeof window !== "undefined") {
-      window.google?.accounts.id?.disableAutoSelect?.();
+    try {
+      const syncedUser = await ensureUserRecord({
+        name: profile.name,
+        email: profile.email,
+      });
+      const hydratedUser = formatUserForClient(syncedUser, {
+        name: profile.name ?? syncedUser?.username,
+        picture: profile.picture,
+      });
+      setUser(hydratedUser);
+      if (typeof window !== "undefined") {
+        window.google?.accounts.id?.disableAutoSelect?.();
+      }
+    } catch (error) {
+      console.error("Google sign-in error:", error);
+      setAuthError("Unable to complete Google sign-in. Please try again.");
     }
   };
 
   const handleSignOut = () => {
     setUser(null);
     setAuthError("");
+    resetDashboardState();
+    setStateHydrated(false);
     if (typeof window !== "undefined") {
       window.google?.accounts.id?.disableAutoSelect?.();
     }
@@ -237,209 +431,6 @@ const StudyHubApp = () => {
       });
     }
   }, [googleReady, googleClientId, user, authScreen]);
-
-  // ----- DATA -----
-  const [courses, setCourses] = useState([
-    {
-      id: "1",
-      code: "MATH201",
-      name: "Calculus II",
-      instructor: "Prof. Michael Chen",
-      credits: 4,
-      color: "purple",
-      semester: "Fall 2024",
-      description: "Advanced integration techniques and series",
-    },
-    {
-      id: "2",
-      code: "CS101",
-      name: "Introduction to Computer Science",
-      instructor: "Dr. Sarah Johnson",
-      credits: 4,
-      color: "blue",
-      semester: "Fall 2024",
-      description: "Fundamentals of programming and computational thinking",
-    },
-    {
-      id: "3",
-      code: "PHYS150",
-      name: "Physics for Engineers",
-      instructor: "Dr. Emily Rodriguez",
-      credits: 3,
-      color: "pink",
-      semester: "Fall 2024",
-      description: "Classical mechanics and thermodynamics",
-    },
-  ]);
-
-  const [assignments, setAssignments] = useState([
-    {
-      id: "1",
-      courseId: "1",
-      title: "Calculus Midterm Exam",
-      description: "Chapters 1-5",
-      dueDate: "2024-08-01",
-      priority: "high",
-      status: "overdue",
-      type: "exam",
-      weight: 30,
-    },
-    {
-      id: "2",
-      courseId: "2",
-      title: "Programming Assignment 1",
-      description: "Build a simple calculator application",
-      dueDate: "2024-07-15",
-      priority: "high",
-      status: "overdue",
-      type: "assignment",
-      weight: 15,
-    },
-    {
-      id: "3",
-      courseId: "3",
-      title: "Lab Report 3",
-      description: "",
-      dueDate: "2024-07-20",
-      priority: "medium",
-      status: "overdue",
-      type: "lab",
-      weight: 10,
-    },
-  ]);
-
-  const [classes, setClasses] = useState([
-    {
-      id: "1",
-      courseId: "1",
-      type: "lecture",
-      dayOfWeek: "Monday",
-      startTime: "09:00",
-      endTime: "10:30",
-      location: "Room 301",
-    },
-    {
-      id: "2",
-      courseId: "1",
-      type: "lecture",
-      dayOfWeek: "Wednesday",
-      startTime: "09:00",
-      endTime: "10:30",
-      location: "Room 301",
-    },
-    {
-      id: "3",
-      courseId: "2",
-      type: "lecture",
-      dayOfWeek: "Tuesday",
-      startTime: "11:00",
-      endTime: "12:30",
-      location: "Room 205",
-    },
-    {
-      id: "4",
-      courseId: "1",
-      type: "lecture",
-      dayOfWeek: "Monday",
-      startTime: "13:00",
-      endTime: "14:30",
-      location: "Science Building A",
-    },
-    {
-      id: "5",
-      courseId: "3",
-      type: "lab",
-      dayOfWeek: "Friday",
-      startTime: "10:00",
-      endTime: "12:00",
-      location: "Physics Lab 2",
-    },
-    {
-      id: "6",
-      courseId: "2",
-      type: "tutorial",
-      dayOfWeek: "Thursday",
-      startTime: "14:00",
-      endTime: "15:00",
-      location: "Room 108",
-    },
-  ]);
-
-  const today = new Date();
-  const [calendarMonth, setCalendarMonth] = useState(today.getMonth());
-  const [calendarYear, setCalendarYear] = useState(today.getFullYear());
-  const courseColorPalette = ["purple", "blue", "pink", "green", "orange"];
-  const [courseForm, setCourseForm] = useState({
-    code: "",
-    name: "",
-    instructor: "",
-    credits: "3",
-    semester: "Fall 2024",
-    description: "",
-    color: courseColorPalette[0],
-  });
-  const [editingCourseId, setEditingCourseId] = useState(null);
-  const courseFormRef = useRef(null);
-
-  const [isScheduleModalOpen, setIsScheduleModalOpen] = useState(false);
-  const [editingClassId, setEditingClassId] = useState(null);
-  const [classForm, setClassForm] = useState({
-    courseId: courses[0]?.id ?? "",
-    type: "lecture",
-    dayOfWeek: "Monday",
-    startTime: "09:00",
-    endTime: "10:00",
-    location: "",
-  });
-
-  const [holidays, setHolidays] = useState([]);
-  const [holidayError, setHolidayError] = useState("");
-  const [holidaysLoading, setHolidaysLoading] = useState(false);
-  const [isAssignmentModalOpen, setIsAssignmentModalOpen] = useState(false);
-  const [editingAssignmentId, setEditingAssignmentId] = useState(null);
-  const buildAssignmentForm = () => ({
-    courseId: courses[0]?.id ?? "",
-    title: "",
-    description: "",
-    dueDate: new Date().toISOString().split("T")[0],
-    priority: "medium",
-    status: "not_started",
-    type: "assignment",
-    weight: 5,
-  });
-  const [assignmentForm, setAssignmentForm] = useState(buildAssignmentForm);
-
-  const [notebooks, setNotebooks] = useState([
-    {
-      id: "1",
-      name: "gfdgfd",
-      color: "blue",
-      courseId: null,
-      pages: [
-        {
-          id: "1",
-          title: "Page 1",
-          content: "",
-          createdDate: "2024-10-16T22:18:00",
-        },
-      ],
-    },
-  ]);
-
-  const [studySessions, setStudySessions] = useState([
-    {
-      id: "1",
-      courseId: "2",
-      duration: 0,
-      date: new Date().toISOString().split("T")[0],
-    },
-  ]);
-
-  const [timerState, setTimerState] = useState({
-    isRunning: false,
-    seconds: 0,
-    selectedCourse: null,
-  });
 
 
   useEffect(() => {
@@ -579,7 +570,7 @@ const StudyHubApp = () => {
     if (resetForm || !classForm.courseId) {
       setEditingClassId(null);
       setClassForm({
-        courseId: courses[0].id,
+        courseId: courses[0]?.id ?? "",
         type: "lecture",
         dayOfWeek: "Monday",
         startTime: "09:00",
@@ -2296,11 +2287,19 @@ END:VCALENDAR`.replace(/\n/g, "\r\n");
         </aside>
 
         {/* Main content */}
-        <main className="flex-1 md:ml-64 w-full">
+        <main className="flex-1 w-full md:ml-4 lg:ml-6">
           <div className="px-4 sm:px-6 lg:px-8 py-6">
             <div className="mb-6 space-y-3">
               {authError && (
                 <div className="bg-red-50 border border-red-200 text-red-700 text-sm rounded-lg px-4 py-2">{authError}</div>
+              )}
+              {stateLoading && userId && (
+                <div className="bg-blue-50 border border-blue-100 text-blue-800 text-sm rounded-lg px-4 py-2">
+                  Loading your saved study data…
+                </div>
+              )}
+              {stateError && (
+                <div className="bg-yellow-50 border border-yellow-200 text-yellow-800 text-sm rounded-lg px-4 py-2">{stateError}</div>
               )}
               {isGoogleConfigured ? (
                 user ? (

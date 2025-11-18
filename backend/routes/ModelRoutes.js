@@ -57,7 +57,9 @@ for (const m of models){
 
 //for user//
 router.get("/user", controllers.getUsers);
+router.get("/user/email/:email", controllers.getUserByEmail);
 router.get("/user/:userId", validateParams(Schemas.makeIdSchema("userId")), controllers.getUsersById);
+router.post("/auth/login", controllers.loginUser);
 
 //for course//
 router.get("/course/user/:userId", validateParams(Schemas.makeIdSchema("userId")), controllers.getCoursesByUser);
@@ -221,6 +223,10 @@ router.delete("/question/:questionId", validateParams(Schemas.makeIdSchema("ques
 
 //for event tag//
 router.delete("/eventtag/:tagId", validateParams(Schemas.makeIdSchema("tagId")), deleteControllers.deleteEventTag);
+
+// dashboard state routes //
+router.get("/dashboard-state/:userId", controllers.getDashboardStateByUser);
+router.post("/dashboard-state", controllers.upsertDashboardState);
 
 
 export default router;
